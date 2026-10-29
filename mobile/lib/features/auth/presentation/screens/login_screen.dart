@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../workers/presentation/screens/workers_list_screen.dart';
-import '../../traffic_light/presentation/screens/traffic_light_screen.dart';
+import '../../../workers/presentation/screens/workers_list_screen.dart';
+import '../../../traffic_light/presentation/screens/traffic_light_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
