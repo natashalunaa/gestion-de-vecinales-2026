@@ -1,87 +1,117 @@
 # App Móvil - Sistema de Gestión y Control de Desmalezado
 
-Aplicación móvil desarrollada en **Flutter** utilizando **Clean Architecture orientada a Features (Feature-First)**.
+Aplicación móvil desarrollada en **Flutter** utilizando **Clean Architecture orientada a Features (Feature-First)** y **Riverpod 2.x** como gestor de estado reactivo e inyección de dependencias.
 
 ---
 
-## 🎯 ¿Por qué Clean Architecture Feature-First?
+## 🎯 ¿Por qué Riverpod + Feature-First?
 
-Con un equipo de varias personas y un plazo de **1 mes**, la organización por capas tradicional (`lib/screens/`, `lib/models/`, `lib/controllers/`) genera cuellos de botella y conflictos de merge constantes en git.
-
-Con **Feature-First**:
-- Cada funcionalidad reside en su propia carpeta bajo `lib/features/<nombre_feature>/`.
-- Cada miembro del equipo es **dueño** de su feature (ejemplo: Miembro A en `auth/`, Miembro B en `workers/`, Miembro C en `traffic_light/`).
-- Pueden crear modelos, pantallas, estados y servicios sin tocar los archivos de sus compañeros.
-- Se respetan las 3 capas esenciales de Clean Architecture de forma **ligera y pragmática** (sin sobreingeniería innecesaria).
+1. **Desacoplamiento total para el equipo (1 mes de plazo)**:
+   - Cada feature encapsula su lógica de estado dentro de `presentation/controllers/` (o `presentation/providers/`).
+   - Un desarrollador trabajando en `features/tasks/` define su propio `taskControllerProvider` sin tocar ningún otro archivo del proyecto.
+2. **Inyección de Dependencias limpia y testeable**:
+   - Los repositorios y datasources se declaran como `Provider<WorkerRepository>` y se inyectan en los Notifiers. Para hacer tests unitarios, basta con sobrescribir el provider con un mock usando `ProviderScope(overrides: [...])`.
+3. **Manejo declarativo de estados asíncronos (`AsyncValue`)**:
+   - Riverpod maneja nativamente los estados de `loading`, `error` y `data` mediante `.when(...)`, eliminando booleanos manuales (`isLoading = true/false`) y `setState()`.
+4. **Sin necesidad de `build_runner`**:
+   - Usamos la sintaxis estándar de `Notifier` y `AsyncNotifier` de Riverpod 2.x, lo que evita esperas de compilación de generadores de código y conflictos de archivos generados en Git.
 
 ---
 
 ## 📁 Estructura del Proyecto
 
 ```text
-app/lib/
+mobile/lib/
 ├── core/                               # 🌐 Compartido por toda la app
 │   ├── constants/                      # URLs de API, rutas, textos fijos
-│   ├── errors/                         # Definición de fallas y excepciones
-│   ├── network/                        # Cliente HTTP y manejo de tokens
 │   ├── theme/                          # Colores semafóricos, fuentes y estilos
-│   └── widgets/                        # Componentes UI reutilizables (Botones, inputs, badges)
+│   └── ...
 │
 ├── features/                           # 📦 Módulos independientes por funcionalidad
 │   │
 │   ├── auth/                           # 🔐 Módulo de Autenticación y Roles
-│   │   ├── domain/                     # Entidades de Usuario, Casos de uso
-│   │   ├── data/                       # Llamada a login del backend
-│   │   └── presentation/               # LoginScreen, widgets
+│   │   ├── domain/models/auth_state.dart
+│   │   └── presentation/
+│   │       ├── controllers/auth_controller.dart   # NotifierProvider<AuthController, AuthState>
+│   │       └── screens/login_screen.dart          # ConsumerStatefulWidget / ConsumerWidget
 │   │
 │   ├── workers/                        # 👷 Módulo de Desmalezadores y Seguros (HU-001 / HU-002)
 │   │   ├── domain/
-│   │   │   ├── entities/               # WorkerEntity, InsuranceEntity
-│   │   │   ├── repositories/           # Contrato abstracto WorkerRepository
-│   │   │   └── usecases/               # GetWorkers, RegisterWorker
+│   │   │   ├── entities/worker.dart
+│   │   │   └── repositories/worker_repository.dart
 │   │   ├── data/
-│   │   │   ├── datasources/            # Peticiones HTTP a /api/workers
-│   │   │   ├── models/                 # WorkerModel (fromJson / toJson)
-│   │   │   └── repositories/           # Implementación de WorkerRepository
+│   │   │   ├── models/worker_model.dart
+│   │   │   └── repositories/mock_worker_repository.dart
 │   │   └── presentation/
-│   │       ├── screens/                # WorkersListScreen, WorkerFormScreen
-│   │       ├── state/                  # ChangeNotifier / Cubit para el estado
-│   │       └── widgets/                # WorkerCard, InsuranceStatusBadge
+│   │       ├── controllers/workers_controller.dart # AsyncNotifierProvider<WorkersController, List<WorkerEntity>>
+│   │       └── screens/
+│   │           ├── workers_list_screen.dart        # ConsumerWidget con .when(data, loading, error)
+│   │           └── worker_form_screen.dart         # ConsumerStatefulWidget llamando a addWorker()
 │   │
-│   ├── traffic_light/                  # 🚦 Módulo de Semáforo y Mapa de Espacios Verdes
-│   │   ├── domain/                     # GreenSpaceEntity (Plaza, vereda, color de semáforo)
-│   │   ├── data/                       # Obtención de espacios verdes
-│   │   └── presentation/               # Mapa con pines coloreados (Verde/Amarillo/Rojo)
+│   ├── traffic_light/                  # 🚦 Módulo de Semáforo y Espacios Verdes (RF-08, RF-14)
+│   │   ├── domain/entities/green_space_entity.dart
+│   │   └── presentation/
+│   │       ├── controllers/traffic_light_controller.dart # NotifierProvider, filtros y selectores derivados
+│   │       └── screens/traffic_light_screen.dart         # ConsumerWidget con pestañas de filtro reactivas
 │   │
-│   ├── tasks/                          # 📸 Módulo de Registro de Tareas con Evidencia
-│   │   ├── domain/                     # TaskEntity, PhotoEvidence
-│   │   ├── data/                       # Subida de fotos y GPS
-│   │   └── presentation/               # TaskExecutionScreen (Cámara, GPS, envío)
-│   │
-│   └── claims/                         # 📢 Módulo de Reclamos Vecinales (RF-18)
-│       ├── domain/
-│       ├── data/
-│       └── presentation/
+│   ├── tasks/                          # 📸 Módulo de Registro de Tareas con Evidencia (Cámara + GPS)
+│   └── inspections/                    # 📋 Módulo de Validación de Tareas por Inspector
 │
-├── app.dart                            # MaterialApp y configuración de rutas
-└── main.dart                           # Entrypoint de Flutter
+├── app.dart                            # MaterialApp y configuración de temas
+└── main.dart                           # Entrypoint envuelto en ProviderScope
 ```
 
 ---
 
-## 🛠️ Cómo implementar una nueva Feature (Paso a Paso)
+## 🛠️ Guía Rápida de Riverpod para el Equipo
 
-Para que cualquier miembro del equipo comience:
+### 1. ¿Cómo crear un nuevo Notifier en tu Feature?
 
-1. **Crea la carpeta de tu feature**: `lib/features/<mi_feature>/`.
-2. **Dominio primero (`domain/`)**:
-   - `entities/`: La clase con los datos puros.
-   - `repositories/`: La interfaz abstracta de lo que necesitas pedir o guardar.
-3. **Datos (`data/`)**:
-   - `models/`: La clase con `.fromJson()` y `.toJson()`.
-   - `datasources/`: La función que hace `http.get` o `http.post`.
-   - `repositories/`: Implementa la interfaz del dominio llamando al datasource.
-4. **Presentación (`presentation/`)**:
-   - `state/`: Tu gestor de estado (un simple `ChangeNotifier` o `Cubit`).
-   - `screens/`: Tu pantalla Scaffold conectada a tu estado.
-5. **Ruta**: Registra tu pantalla en `app.dart`.
+Crea un archivo en `features/<tu_feature>/presentation/controllers/<feature>_controller.dart`:
+
+```dart
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+class MiFeatureController extends Notifier<List<MiModelo>> {
+  @override
+  List<MiModelo> build() {
+    return []; // Estado inicial
+  }
+
+  void agregarElemento(MiModelo nuevo) {
+    state = [...state, nuevo]; // Actualización inmutable
+  }
+}
+
+final miFeatureControllerProvider =
+    NotifierProvider<MiFeatureController, List<MiModelo>>(MiFeatureController.new);
+```
+
+### 2. ¿Cómo consumirlo en una pantalla?
+
+Convierte tu Widget en `ConsumerWidget` y usa `ref`:
+
+```dart
+class MiPantalla extends ConsumerWidget {
+  const MiPantalla({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 1. Escuchar el estado reactivamente (la pantalla se redibuja si cambia)
+    final items = ref.watch(miFeatureControllerProvider);
+
+    return Scaffold(
+      body: ListView.builder(
+        itemCount: items.length,
+        itemBuilder: (ctx, i) => Text(items[i].nombre),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // 2. Ejecutar métodos del controlador (usar ref.read dentro de eventos/botones)
+          ref.read(miFeatureControllerProvider.notifier).agregarElemento(nuevo);
+        },
+      ),
+    );
+  }
+}
+```

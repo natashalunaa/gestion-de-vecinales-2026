@@ -1,27 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../domain/models/auth_state.dart';
+import '../controllers/auth_controller.dart';
 import '../../../workers/presentation/screens/workers_list_screen.dart';
 import '../../../traffic_light/presentation/screens/traffic_light_screen.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController(text: 'admin@riocuarto.gov.ar');
   final _passwordController = TextEditingController(text: '••••••••');
-  String _selectedRole = 'Administrador Municipal';
-
-  final List<String> _roles = [
-    'Administrador Municipal',
-    'Inspector',
-    'Desmalezador',
-    'Responsable Vecinal',
-    'Vecino',
-  ];
+  UserRole _selectedRole = UserRole.admin;
 
   @override
   void dispose() {
@@ -31,11 +26,15 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _login() {
-    // Redirige al menú principal
+    ref.read(authControllerProvider.notifier).login(
+      email: _emailController.text.trim(),
+      role: _selectedRole,
+    );
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => MainDashboardScreen(userRole: _selectedRole),
+        builder: (context) => const MainDashboardScreen(),
       ),
     );
   }
@@ -58,10 +57,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const Text('Municipalidad de Río Cuarto', style: TextStyle(color: Colors.grey)),
                 const SizedBox(height: 32),
-                DropdownButtonFormField<String>(
+                DropdownButtonFormField<UserRole>(
                   initialValue: _selectedRole,
                   decoration: const InputDecoration(labelText: 'Rol / Perfil de Acceso'),
-                  items: _roles.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                  items: UserRole.values.map((r) {
+                    return DropdownMenuItem(value: r, child: Text(r.label));
+                  }).toList(),
                   onChanged: (val) {
                     if (val != null) setState(() => _selectedRole = val);
                   },
@@ -91,16 +92,29 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-class MainDashboardScreen extends StatelessWidget {
-  final String userRole;
-
-  const MainDashboardScreen({super.key, required this.userRole});
+class MainDashboardScreen extends ConsumerWidget {
+  const MainDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authControllerProvider);
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Panel: $userRole'),
+        title: Text('Panel: ${authState.role.label}'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Cerrar sesión',
+            onPressed: () {
+              ref.read(authControllerProvider.notifier).logout();
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              );
+            },
+          )
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -111,9 +125,24 @@ class MainDashboardScreen extends StatelessWidget {
               color: Colors.green.shade50,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  'Sesión activa como: $userRole\nSelecciona el módulo a consultar según tu tarea asignada.',
-                  style: const TextStyle(fontWeight: FontWeight.w500),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Usuario: ${authState.email ?? "admin@riocuarto.gov.ar"}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Rol activo: ${authState.role.label}',
+                      style: TextStyle(color: Colors.green.shade900, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Estado gestionado de forma global y reactiva con Riverpod.',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                  ],
                 ),
               ),
             ),

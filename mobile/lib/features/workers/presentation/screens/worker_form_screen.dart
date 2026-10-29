@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
-import '../../domain/entities/worker.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../controllers/workers_controller.dart';
 
-class WorkerFormScreen extends StatefulWidget {
-  final Function(WorkerEntity) onWorkerAdded;
-
-  const WorkerFormScreen({super.key, required this.onWorkerAdded});
+class WorkerFormScreen extends ConsumerStatefulWidget {
+  const WorkerFormScreen({super.key});
 
   @override
-  State<WorkerFormScreen> createState() => _WorkerFormScreenState();
+  ConsumerState<WorkerFormScreen> createState() => _WorkerFormScreenState();
 }
 
-class _WorkerFormScreenState extends State<WorkerFormScreen> {
+class _WorkerFormScreenState extends ConsumerState<WorkerFormScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _dniController = TextEditingController();
@@ -21,6 +20,7 @@ class _WorkerFormScreenState extends State<WorkerFormScreen> {
   final _insurerNameController = TextEditingController();
 
   DateTime? _insuranceExpiresAt;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -33,50 +33,45 @@ class _WorkerFormScreenState extends State<WorkerFormScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    // Regla HU-001: Si no tiene seguro válido, queda en Pendiente de habilitación
-    InsuranceEntity? insurance;
-    WorkerStatus status = WorkerStatus.pendienteHabilitacion;
+    setState(() => _isSubmitting = true);
 
-    if (_policyNumberController.text.isNotEmpty &&
-        _insurerNameController.text.isNotEmpty &&
-        _insuranceExpiresAt != null) {
-      insurance = InsuranceEntity(
-        policyNumber: _policyNumberController.text.trim(),
-        insurerName: _insurerNameController.text.trim(),
-        expiresAt: _insuranceExpiresAt!,
+    try {
+      await ref.read(workersControllerProvider.notifier).addWorker(
+        dni: _dniController.text.trim(),
+        firstName: _firstNameController.text.trim(),
+        lastName: _lastNameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        policyNumber: _policyNumberController.text.trim().isEmpty ? null : _policyNumberController.text.trim(),
+        insurerName: _insurerNameController.text.trim().isEmpty ? null : _insurerNameController.text.trim(),
+        expiresAt: _insuranceExpiresAt,
       );
-      if (insurance.isValid) {
-        status = WorkerStatus.habilitado;
+
+      if (mounted) {
+        final hasValidInsurance = _insuranceExpiresAt != null && DateTime.now().isBefore(_insuranceExpiresAt!);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(hasValidInsurance
+                ? '¡Desmalezador registrado y Habilitado!'
+                : 'Desmalezador registrado con estado: Pendiente de habilitación'),
+            backgroundColor: hasValidInsurance ? Colors.green : Colors.orange,
+          ),
+        );
+        Navigator.pop(context);
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
-
-    final newWorker = WorkerEntity(
-      id: 'w-${DateTime.now().millisecondsSinceEpoch}',
-      dni: _dniController.text.trim(),
-      firstName: _firstNameController.text.trim(),
-      lastName: _lastNameController.text.trim(),
-      phone: _phoneController.text.trim(),
-      status: status,
-      insurance: insurance,
-    );
-
-    widget.onWorkerAdded(newWorker);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(status == WorkerStatus.habilitado
-            ? '¡Desmalezador registrado y Habilitado!'
-            : 'Desmalezador registrado con estado: Pendiente de habilitación'),
-        backgroundColor: status == WorkerStatus.habilitado ? Colors.green : Colors.orange,
-      ),
-    );
-
-    Navigator.pop(context);
   }
 
   @override
@@ -163,8 +158,14 @@ class _WorkerFormScreenState extends State<WorkerFormScreen> {
               ),
               const SizedBox(height: 28),
               ElevatedButton(
-                onPressed: _submit,
-                child: const Text('Guardar Desmalezador'),
+                onPressed: _isSubmitting ? null : _submit,
+                child: _isSubmitting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Guardar Desmalezador con Riverpod'),
               ),
             ],
           ),
