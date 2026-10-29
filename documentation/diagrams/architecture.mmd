@@ -1,0 +1,42 @@
+graph TD
+    %% Definición de Estilos
+    classDef cliente fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    classDef mobile fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
+    classDef docker fill:#f5f5f5,stroke:#616161,stroke-width:2px,stroke-dasharray: 5 5;
+    classDef app fill:#e8f5e9,stroke:#388e3c,stroke-width:2px;
+    classDef db fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
+
+    %% Entornos de Clientes (Fuera del Servidor)
+    subgraph Clientes [Entorno de Clientes / Dispositivos]
+        WEB[Cliente Web Admin / Vecino: Next.js + React]
+        MOB[App Móvil Desmalezadores: Flutter]
+    end
+
+    %% Defino lo visual para los clientes
+    class WEB cliente;
+    class MOB mobile;
+
+    %% Entorno del Servidor (Contenedores Docker)
+    subgraph Docker [Servidor / Entorno Docker]
+        GO[Backend API: Control Plane Go / Next.js API]
+        GO1[Backend API: Go Data Plane]
+        DB[(Base de Datos: PostgreSQL)]
+        VOL[(Volumen de Datos: db_data)]
+        STORAGE[Almacenamiento de Fotos: Evidencia antes/después]
+
+        DB --- VOL
+    end
+
+    %% Defino lo visual según los estilos de servidor
+    class Docker docker;
+    class GO app;
+    class GO1 app;
+    class DB,VOL,STORAGE db;
+
+    %% Conexiones
+    WEB -->|Peticiones HTTP / REST API| GO
+    MOB -->|Peticiones REST API + GPS / Fotos| GO
+    WEB -->|Peticiones HTTP / REST API| GO1
+    MOB -->|Peticiones REST API + GPS / Fotos| GO1
+    GO <-->|Consultas SQL | DB
+    GO1 -->|Guardado de Imágenes| STORAGE
